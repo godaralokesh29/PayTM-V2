@@ -28,7 +28,7 @@ export const Users = () => {
         <div>
             {users.map(user => <User user={user} />)}
         </div>
-    </>
+    </> 
 }
 
 function User({user}) {
