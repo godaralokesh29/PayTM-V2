@@ -9,51 +9,59 @@ const { JWT_SECRET } = require("../config");
 const  { authMiddleware } = require("../middleware");
 
 const signupBody = zod.object({
-    username: zod.string().email(),
-	firstName: zod.string(),
-	lastName: zod.string(),
-	password: zod.string()
+    username: zod.string().email({ message: "Invalid email address" }),
+    firstName: zod.string().min(1, { message: "First name is required" }),
+    lastName: zod.string().min(1, { message: "Last name is required" }),
+    password: zod.string().min(6, { message: "Password must be at least 6 characters" })
 })
 
 router.post("/signup", async (req, res) => {
-    const { success } = signupBody.safeParse(req.body)
-    if (!success) {
-        return res.status(411).json({
-            message: "Email already taken / Incorrect inputs"
-        })
+    try {
+        const { success, error } = signupBody.safeParse(req.body);
+        if (!success) {
+            return res.status(400).json({
+                message: error.errors[0].message || "Invalid input"
+            });
+        }
+
+        const existingUser = await User.findOne({
+            username: req.body.username
+        });
+
+        if (existingUser) {
+            return res.status(409).json({
+                message: "Email already registered"
+            });
+        }
+
+        const user = await User.create({
+            username: req.body.username,
+            password: req.body.password,
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+        });
+
+        const userId = user._id;
+
+        await Account.create({
+            userId,
+            balance: 5000
+        });
+
+        const token = jwt.sign({
+            userId
+        }, JWT_SECRET);
+
+        res.status(201).json({
+            message: "User created successfully",
+            token: token
+        });
+    } catch (error) {
+        console.error("Signup error:", error);
+        res.status(500).json({
+            message: "Internal server error during signup"
+        });
     }
-
-    const existingUser = await User.findOne({
-        username: req.body.username
-    })
-
-    if (existingUser) {
-        return res.status(411).json({
-            message: "Email already taken/Incorrect inputs"
-        })
-    }
-
-    const user = await User.create({
-        username: req.body.username,
-        password: req.body.password,
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-    })
-    const userId = user._id;
-
-    await Account.create({
-        userId,
-        balance: 1 + Math.random() * 10000
-    })
-
-    const token = jwt.sign({
-        userId
-    }, JWT_SECRET);
-
-    res.json({
-        message: "User created successfully",
-        token: token
-    })
 })
 
 
